@@ -1,0 +1,64 @@
+name: Build macOS arm64 artifact
+permissions: {}
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-macos-arm64:
+    name: Build vaultwarden (macOS arm64)
+    runs-on: macos-14
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Install rust-toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master @ Feb 13, 2026, 3:46 AM GMT+1
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Rust caching
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          prefix-key: "v2026.02-rust"
+
+      - name: Build vaultwarden binary
+        run: |
+          cargo build --locked --release --target aarch64-apple-darwin --features sqlite,vendored_openssl
+
+      - name: Create artifact bundle
+        id: bundle
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          SHORT_SHA="${SOURCE_COMMIT:0:8}"
+          BUNDLE_NAME="vaultwarden-macos-arm64-${SHORT_SHA}"
+          mkdir -p artifacts
+          cp target/aarch64-apple-darwin/release/vaultwarden artifacts/vaultwarden
+          chmod +x artifacts/vaultwarden
+          tar -C artifacts -czf "artifacts/${BUNDLE_NAME}.tar.gz" vaultwarden
+          shasum -a 256 "artifacts/${BUNDLE_NAME}.tar.gz" > "artifacts/${BUNDLE_NAME}.sha256"
+          echo "bundle_name=${BUNDLE_NAME}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload artifact bundle
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: ${{ steps.bundle.outputs.bundle_name }}
+          path: |
+            artifacts/${{ steps.bundle.outputs.bundle_name }}.tar.gz
+            artifacts/${{ steps.bundle.outputs.bundle_name }}.sha256
+          if-no-files-found: error
+          retention-days: 30
