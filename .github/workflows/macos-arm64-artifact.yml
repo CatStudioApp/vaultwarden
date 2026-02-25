@@ -25,9 +25,16 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Determine rust-toolchain version
+        id: toolchain
+        run: |
+          RUST_TOOLCHAIN="$(grep -oE 'channel.*"([^"]+)"' rust-toolchain.toml | grep -oE '"[^"]+"' | tr -d '"')"
+          echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" | tee -a "${GITHUB_OUTPUT}"
+
       - name: Install rust-toolchain
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master @ Feb 13, 2026, 3:46 AM GMT+1
         with:
+          toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
           targets: aarch64-apple-darwin
 
       - name: Rust caching
